@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Button, Empty, Popconfirm, Rate, Spin, Tag, Typography, Upload } from 'antd'
 import { DeleteOutlined, EditOutlined, PictureOutlined } from '@ant-design/icons'
 import type { Dish } from '../../api/backend'
@@ -15,15 +15,35 @@ interface Props {
   onUpload: (dish: Dish, file: File) => void
 }
 
+const categoryAccents: Record<string, string[]> = {
+  肉类: ['#a95742', '#c06b4d', '#8e4937'],
+  海鲜: ['#4f7f73', '#6d9787', '#527a89'],
+  蔬菜: ['#6e8655', '#8b935d', '#4f765a'],
+  汤羹: ['#9b7758', '#aa8766', '#857d63'],
+}
+
+function dishAccent(dish: Dish) {
+  const palette = categoryAccents[dish.category] ?? ['#8a735f', '#6f8275', '#a06e58']
+  const hash = Array.from(dish.name).reduce((total, char) => total + (char.codePointAt(0) ?? 0), 0)
+  return palette[hash % palette.length]
+}
+
 function DishImage({ dish }: { dish: Dish }) {
   const [src, setSrc] = useState<string>()
+  const accent = useMemo(() => dishAccent(dish), [dish.category, dish.name])
   useEffect(() => {
     let active = true
     let url: string | undefined
+    setSrc(undefined)
     if (dish.has_image) loadDishImage(dish.id).then((value) => { url = value; if (active) setSrc(value) }).catch(() => undefined)
-    return () => { active = false; if (url) URL.revokeObjectURL(url) }
+    return () => { active = false; if (url?.startsWith('blob:')) URL.revokeObjectURL(url) }
   }, [dish.id, dish.has_image, dish.updated_at])
-  return src ? <img className="dish-image" src={src} alt={dish.name} /> : <div className="dish-placeholder"><span>🍽</span><small>添加成品图</small></div>
+  if (src) return <img className="dish-image" src={src} alt={dish.name} />
+  return <div className="dish-placeholder" style={{ '--dish-accent': accent } as CSSProperties} aria-label={`${dish.name}默认封面`}>
+    <span className="dish-placeholder-category">{dish.category}</span>
+    <strong>{dish.name.trim().slice(0, 1) || '味'}</strong>
+    <div className="dish-placeholder-rings" aria-hidden="true"><i/><i/><i/></div>
+  </div>
 }
 
 export default function DishList({ dishes, loading, dateLabel, onEdit, onDelete, onRate, onUpload }: Props) {
