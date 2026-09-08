@@ -133,12 +133,41 @@ export const classicRecipes: ClassicRecipe[] = [
 
 export const CLASSIC_RECIPE_TOTAL = classicRecipes.length
 
+export function getPrimaryIngredientFamily(recipe: ClassicRecipe): string {
+  const primary = recipe.ingredients[0]
+  const families: Array<[string, string]> = [
+    ['豆腐', '豆腐'], ['鸡', '鸡肉'], ['鸭', '鸭肉'], ['排骨', '排骨'],
+    ['牛', '牛肉'], ['羊', '羊肉'], ['猪|五花|里脊|肉馅|梅花肉', '猪肉'],
+    ['虾', '虾'], ['蟹', '蟹'], ['带鱼', '带鱼'], ['黄鱼', '黄鱼'],
+    ['鱿鱼', '鱿鱼'], ['大米', '米粥'], ['茄子', '茄子'],
+  ]
+  return families.find(([pattern]) => new RegExp(pattern).test(primary))?.[1] ?? primary
+}
+
+function seededScore(seed: string): number {
+  let hash = 2166136261
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
 export function getDailyClassicRecipes(dateKey: string): ClassicRecipe[] {
-  const day = Math.floor(new Date(`${dateKey}T00:00:00Z`).getTime() / 86_400_000)
   const categories = ['肉类', '海鲜', '蔬菜', '汤羹'] as const
-  return categories.flatMap((category, categoryIndex) => {
-    const pool = classicRecipes.filter(recipe => recipe.category === category)
-    const start = ((day * 3) + categoryIndex * 7) % pool.length
-    return Array.from({ length: 3 }, (_, offset) => pool[(start + offset) % pool.length])
+  return categories.flatMap(category => {
+    const ranked = classicRecipes
+      .filter(recipe => recipe.category === category)
+      .sort((left, right) => seededScore(`${dateKey}-${left.id}`) - seededScore(`${dateKey}-${right.id}`))
+    const selected: ClassicRecipe[] = []
+    const usedFamilies = new Set<string>()
+    for (const recipe of ranked) {
+      const family = getPrimaryIngredientFamily(recipe)
+      if (usedFamilies.has(family)) continue
+      selected.push(recipe)
+      usedFamilies.add(family)
+      if (selected.length === 3) break
+    }
+    return selected
   })
 }
